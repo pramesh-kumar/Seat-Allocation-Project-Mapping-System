@@ -1,5 +1,15 @@
 # Ethara Seat Allocation & Project Mapping System
 
+## 🌐 Live Deployment
+
+| Service | URL |
+|---------|-----|
+| **Frontend** | https://seat-allocation-project-mapping-sys.vercel.app/ |
+| **Backend API** | https://seat-allocation-project-mapping-system.onrender.com/ |
+| **Swagger Docs** | https://seat-allocation-project-mapping-system.onrender.com/docs |
+
+---
+
 A comprehensive full-stack enterprise application designed to manage employee seating layouts, project mappings, seat utilization metrics, and new joiner onboarding queues for approximately 5,000 employees. 
 
 This repository houses a **FastAPI backend** (SQLite/PostgreSQL compatible) and a **React + Tailwind CSS v4 frontend** powered by Vite.
@@ -21,7 +31,8 @@ This repository houses a **FastAPI backend** (SQLite/PostgreSQL compatible) and 
 
 * **Frontend:** React.js, Tailwind CSS v4 (Vite compiler), Lucide Icons, Axios.
 * **Backend:** FastAPI, Python, Uvicorn, SQLAlchemy.
-* **Database:** SQLite (local development with foreign key enforcement) and PostgreSQL/Supabase (compatible for production).
+* **Database:** SQLite (local development) / PostgreSQL via Supabase (production).
+* **Deployment:** Render (backend), Vercel (frontend).
 
 ---
 
@@ -132,7 +143,9 @@ The system restricts routes and UI controls based on the simulated role passed v
 
 ## 🔌 API Documentation Summary
 
-FastAPI provides an interactive OpenAPI / Swagger UI at `http://localhost:8080/docs`.
+FastAPI provides an interactive OpenAPI / Swagger UI at:
+- **Production:** https://seat-allocation-project-mapping-system.onrender.com/docs
+- **Local:** `http://localhost:8080/docs`
 
 ### Key Endpoints:
 * `POST /api/seed` - Admin only. Resets the database and seeds 5,000 employees, seats, and 20 projects.
