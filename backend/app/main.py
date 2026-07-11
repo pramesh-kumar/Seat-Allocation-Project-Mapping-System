@@ -9,7 +9,7 @@ if os.path.exists(dotenv_path):
                 k, v = line.split("=", 1)
                 os.environ[k.strip()] = v.strip().strip('"\'')
 
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from app.database import engine, Base, get_db
@@ -50,16 +50,17 @@ def read_root():
         "version": "1.0.0"
     }
 
-@app.post("/api/seed", status_code=status.HTTP_200_OK)
+@app.post("/api/seed", status_code=status.HTTP_202_ACCEPTED)
 def trigger_seeding(
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_role: str = Depends(RoleChecker(allowed_roles={"Admin"}))
 ):
-    try:
-        seed.seed_database(db)
-        return {"message": "Database seeded successfully with 5,000 employees and seats!"}
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Seeding failed: {str(e)}"
-        )
+    def run_seed():
+        try:
+            seed.seed_database(db)
+        except Exception as e:
+            print(f"Seeding error: {e}")
+
+    background_tasks.add_task(run_seed)
+    return {"message": "Seeding started! Data will be ready in ~60 seconds. Refresh the page after a minute."}

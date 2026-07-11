@@ -10,10 +10,14 @@ export default function SettingsPanel({ activeRole }) {
     setSeeding(true);
     try {
       const res = await api.triggerSeeding();
-      alert(res.message);
-      window.location.reload();
+      alert(res.message || "Seeding started! Please wait ~60 seconds then refresh the page.");
     } catch (err) {
-      alert("Failed to seed database. Make sure the backend server is running.");
+      // 202 Accepted is success — some axios versions treat non-200 as error
+      if (err?.response?.status === 202) {
+        alert("Seeding started! Please wait ~60 seconds then refresh the page.");
+      } else {
+        alert("Failed to seed database: " + (err?.response?.data?.detail || err.message));
+      }
     } finally {
       setSeeding(false);
     }
