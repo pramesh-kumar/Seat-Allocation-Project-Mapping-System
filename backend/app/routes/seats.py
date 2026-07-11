@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
+from sqlalchemy import and_
 from typing import List, Optional
 from app import crud, schemas, models
 from app.database import get_db
@@ -7,35 +8,52 @@ from app.auth import RoleChecker
 
 router = APIRouter(prefix="/api/seats", tags=["Seats"])
 
-# Helper to format Seat DB model to SeatOut schema
-def format_seat_out(db: Session, seat: models.Seat) -> schemas.SeatOut:
-    occupant = None
-    if seat.status == "OCCUPIED":
-        # Find active allocation
-        alloc = db.query(models.SeatAllocation).filter(
-            models.SeatAllocation.seat_id == seat.id,
+def format_seats_bulk(db: Session, seats: list[models.Seat]) -> list[schemas.SeatOut]:
+    if not seats:
+        return []
+
+    # Single query to get all active allocations + employee info for these seats
+    seat_ids = [s.id for s in seats]
+    occupied_ids = [s.id for s in seats if s.status == "OCCUPIED"]
+
+    occupant_map: dict[int, schemas.SeatOccupantOut] = {}
+    if occupied_ids:
+        rows = db.query(
+            models.SeatAllocation.seat_id,
+            models.Employee.id,
+            models.Employee.employee_id,
+            models.Employee.first_name,
+            models.Employee.last_name,
+            models.Employee.department,
+            models.Employee.role,
+        ).join(
+            models.Employee, models.Employee.id == models.SeatAllocation.employee_id
+        ).filter(
+            models.SeatAllocation.seat_id.in_(occupied_ids),
             models.SeatAllocation.released_at.is_(None)
-        ).first()
-        if alloc and alloc.employee_id:
-            emp = db.query(models.Employee).filter(models.Employee.id == alloc.employee_id).first()
-            if emp:
-                occupant = schemas.SeatOccupantOut(
-                    id=emp.id,
-                    employee_id=emp.employee_id,
-                    full_name=emp.full_name,
-                    department=emp.department,
-                    role=emp.role
-                )
-                
-    return schemas.SeatOut(
-        id=seat.id,
-        seat_code=seat.seat_code,
-        floor=seat.floor,
-        zone=seat.zone,
-        number=seat.number,
-        status=seat.status,
-        occupant=occupant
-    )
+        ).all()
+
+        for row in rows:
+            occupant_map[row.seat_id] = schemas.SeatOccupantOut(
+                id=row.id,
+                employee_id=row.employee_id,
+                full_name=f"{row.first_name} {row.last_name}",
+                department=row.department,
+                role=row.role
+            )
+
+    return [
+        schemas.SeatOut(
+            id=s.id,
+            seat_code=s.seat_code,
+            floor=s.floor,
+            zone=s.zone,
+            number=s.number,
+            status=s.status,
+            occupant=occupant_map.get(s.id) if s.status == "OCCUPIED" else None
+        )
+        for s in seats
+    ]
 
 @router.get("", response_model=List[schemas.SeatOut])
 def read_seats(
@@ -46,7 +64,7 @@ def read_seats(
     db: Session = Depends(get_db)
 ):
     seats = crud.get_seats(db, floor=floor, zone=zone, status=status, project_id=project_id)
-    return [format_seat_out(db, seat) for seat in seats]
+    return format_seats_bulk(db, seats)
 
 @router.get("/recommend/{employee_id}", response_model=List[schemas.SeatOut])
 def recommend_seats(
@@ -60,14 +78,14 @@ def recommend_seats(
         raise HTTPException(status_code=404, detail="Employee not found")
         
     recommended = crud.get_seat_recommendations(db, employee_id, limit=limit)
-    return [format_seat_out(db, seat) for seat in recommended]
+    return format_seats_bulk(db, recommended)
 
 @router.get("/{seat_id}", response_model=schemas.SeatOut)
 def read_seat(seat_id: int, db: Session = Depends(get_db)):
     seat = crud.get_seat(db, seat_id)
     if not seat:
         raise HTTPException(status_code=404, detail="Seat not found")
-    return format_seat_out(db, seat)
+    return format_seats_bulk(db, [seat])[0]
 
 @router.put("/{seat_id}/status", response_model=schemas.SeatOut)
 def change_seat_status(
@@ -88,7 +106,7 @@ def change_seat_status(
         crud.release_seat(db, seat_id)
         
     updated = crud.update_seat_status(db, seat_id, status_update.status)
-    return format_seat_out(db, updated)
+    return format_seats_bulk(db, [updated])[0]
 
 @router.post("/allocate", response_model=schemas.SeatAllocationOut)
 def allocate_employee_seat(
