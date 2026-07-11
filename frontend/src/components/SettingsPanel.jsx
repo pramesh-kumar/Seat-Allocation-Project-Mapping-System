@@ -43,12 +43,12 @@ export default function SettingsPanel({ activeRole }) {
           </div>
           <div className="p-3 bg-slate-50 dark:bg-slate-900/40 rounded border border-slate-200 dark:border-ethara-border/30 space-y-1">
             <span className="text-slate-500 block">FastAPI Server Host</span>
-            <span className="font-mono text-slate-850 dark:text-slate-300">localhost:8080</span>
+            <span className="font-mono text-slate-850 dark:text-slate-300 text-[10px]">seat-allocation-project-mapping-system.onrender.com</span>
           </div>
           <div className="p-3 bg-slate-50 dark:bg-slate-900/40 rounded border border-slate-200 dark:border-ethara-border/30 space-y-1">
             <span className="text-slate-500 block">Database Status</span>
             <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1">
-              <Database className="w-3.5 h-3.5 text-blue-500" /> SQLite Active
+              <Database className="w-3.5 h-3.5 text-blue-500" /> PostgreSQL (Supabase)
             </span>
           </div>
         </div>
