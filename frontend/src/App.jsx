@@ -61,10 +61,13 @@ export default function App() {
     setSeeding(true);
     try {
       const res = await api.triggerSeeding();
-      alert(res.message);
-      window.location.reload();
+      alert(res.message || "Seeding started! Please wait ~60 seconds then refresh the page.");
     } catch (err) {
-      alert("Failed to seed database. Make sure the backend server is running.");
+      if (err?.response?.status === 202) {
+        alert("Seeding started! Please wait ~60 seconds then refresh the page.");
+      } else {
+        alert("Seeding error: " + (err?.response?.data?.detail || err.message));
+      }
     } finally {
       setSeeding(false);
     }
