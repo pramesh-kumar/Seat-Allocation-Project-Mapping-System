@@ -309,79 +309,67 @@ def get_seat_recommendations(db: Session, employee_id: int, limit: int = 5) -> L
     employee = get_employee(db, employee_id)
     if not employee:
         return []
-        
-    # Find active project mapping
+
     primary_project = db.query(models.EmployeeProject).filter(
         models.EmployeeProject.employee_id == employee_id,
         models.EmployeeProject.is_primary == True
     ).first()
-    
-    teammate_allocations = []
+
+    # Get teammate seats in ONE joined query
     if primary_project:
-        # Get other teammates who have active seat allocations
-        teammate_allocations = db.query(models.SeatAllocation).join(models.Employee).join(models.EmployeeProject).filter(
+        teammate_seats = db.query(models.Seat).join(
+            models.SeatAllocation, models.SeatAllocation.seat_id == models.Seat.id
+        ).join(
+            models.Employee, models.Employee.id == models.SeatAllocation.employee_id
+        ).join(
+            models.EmployeeProject, models.EmployeeProject.employee_id == models.Employee.id
+        ).filter(
             models.EmployeeProject.project_id == primary_project.project_id,
             models.Employee.id != employee_id,
             models.SeatAllocation.released_at.is_(None)
         ).all()
-        
-    # If no project teammates sit anywhere, look for department members
-    if not teammate_allocations:
-        teammate_allocations = db.query(models.SeatAllocation).join(models.Employee).filter(
+    else:
+        teammate_seats = db.query(models.Seat).join(
+            models.SeatAllocation, models.SeatAllocation.seat_id == models.Seat.id
+        ).join(
+            models.Employee, models.Employee.id == models.SeatAllocation.employee_id
+        ).filter(
             models.Employee.department == employee.department,
             models.Employee.id != employee_id,
             models.SeatAllocation.released_at.is_(None)
         ).all()
-        
-    # Group teammate seats by Floor + Zone to find the most popular areas
-    location_weights = {}  # key: (floor, zone), value: list of seat numbers
-    for alloc in teammate_allocations:
-        seat = db.query(models.Seat).filter(models.Seat.id == alloc.seat_id).first()
-        if seat:
-            key = (seat.floor, seat.zone)
-            if key not in location_weights:
-                location_weights[key] = []
-            location_weights[key].append(seat.number)
-            
-    # Sort locations by the number of teammates sitting there (descending)
+
+    # Find most popular floor/zone
+    location_weights: dict[tuple, list] = {}
+    for seat in teammate_seats:
+        key = (seat.floor, seat.zone)
+        location_weights.setdefault(key, []).append(seat.number)
+
     sorted_locations = sorted(location_weights.items(), key=lambda x: len(x[1]), reverse=True)
-    
-    recommended_seats = []
-    
-    # Process sorted locations to find the closest AVAILABLE seats
+
+    recommended_seats: list[models.Seat] = []
+    seen_ids: set[int] = set()
+
     for (floor, zone), seat_numbers in sorted_locations:
         if len(recommended_seats) >= limit:
             break
-            
-        # Get all AVAILABLE seats in this floor & zone
-        available_seats = db.query(models.Seat).filter(
+        available = db.query(models.Seat).filter(
             models.Seat.floor == floor,
             models.Seat.zone == zone,
             models.Seat.status == "AVAILABLE"
         ).all()
-        
-        if not available_seats:
-            continue
-            
-        # For each available seat, compute the minimum distance to any teammate
-        def get_min_dist(seat):
-            return min(abs(seat.number - tn) for tn in seat_numbers)
-            
-        # Sort available seats by their proximity to teammates
-        sorted_avail = sorted(available_seats, key=get_min_dist)
-        
-        # Add to recommended list
-        for seat in sorted_avail:
+        for seat in sorted(available, key=lambda s: min(abs(s.number - n) for n in seat_numbers)):
             if len(recommended_seats) >= limit:
                 break
-            if seat not in recommended_seats:
+            if seat.id not in seen_ids:
                 recommended_seats.append(seat)
-                
-    # If we still haven't found enough recommendations, fill up with any available seats
+                seen_ids.add(seat.id)
+
     if len(recommended_seats) < limit:
-        remaining_seats = db.query(models.Seat).filter(
-            models.Seat.status == "AVAILABLE"
-        ).filter(~models.Seat.id.in_([s.id for s in recommended_seats])).limit(limit - len(recommended_seats)).all()
-        recommended_seats.extend(remaining_seats)
-        
+        extras = db.query(models.Seat).filter(
+            models.Seat.status == "AVAILABLE",
+            ~models.Seat.id.in_(seen_ids)
+        ).limit(limit - len(recommended_seats)).all()
+        recommended_seats.extend(extras)
+
     return recommended_seats[:limit]

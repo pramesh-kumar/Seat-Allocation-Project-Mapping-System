@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, case
 from app import models, schemas
 from app.database import get_db
 
@@ -8,69 +8,75 @@ router = APIRouter(prefix="/api/analytics", tags=["Analytics"])
 
 @router.get("", response_model=schemas.OverallAnalytics)
 def get_utilization_analytics(db: Session = Depends(get_db)):
-    # 1. Total Seating Metrics
-    total_seats = db.query(models.Seat).count()
-    
-    occupied_seats = db.query(models.Seat).filter(models.Seat.status == "OCCUPIED").count()
-    available_seats = db.query(models.Seat).filter(models.Seat.status == "AVAILABLE").count()
-    reserved_seats = db.query(models.Seat).filter(models.Seat.status == "RESERVED").count()
-    maintenance_seats = db.query(models.Seat).filter(models.Seat.status == "MAINTENANCE").count()
-    
+    # 1. All seat counts in ONE query
+    seat_counts = db.query(
+        func.count(models.Seat.id).label("total"),
+        func.sum(case((models.Seat.status == "OCCUPIED", 1), else_=0)).label("occupied"),
+        func.sum(case((models.Seat.status == "AVAILABLE", 1), else_=0)).label("available"),
+        func.sum(case((models.Seat.status == "RESERVED", 1), else_=0)).label("reserved"),
+        func.sum(case((models.Seat.status == "MAINTENANCE", 1), else_=0)).label("maintenance"),
+    ).one()
+
+    total_seats = seat_counts.total or 0
+    occupied_seats = int(seat_counts.occupied or 0)
+    available_seats = int(seat_counts.available or 0)
+    reserved_seats = int(seat_counts.reserved or 0)
+    maintenance_seats = int(seat_counts.maintenance or 0)
     overall_occupancy_rate = round((occupied_seats / total_seats * 100), 2) if total_seats > 0 else 0.0
 
-    # 2. Employee Metrics
-    total_employees = db.query(models.Employee).count()
-    active_employees = db.query(models.Employee).filter(models.Employee.status == "ACTIVE").count()
-    onboarding_employees = db.query(models.Employee).filter(models.Employee.status == "ONBOARDING").count()
-    exited_employees = db.query(models.Employee).filter(models.Employee.status == "EXITED").count()
+    # 2. All employee counts in ONE query
+    emp_counts = db.query(
+        func.count(models.Employee.id).label("total"),
+        func.sum(case((models.Employee.status == "ACTIVE", 1), else_=0)).label("active"),
+        func.sum(case((models.Employee.status == "ONBOARDING", 1), else_=0)).label("onboarding"),
+        func.sum(case((models.Employee.status == "EXITED", 1), else_=0)).label("exited"),
+    ).one()
 
-    # 3. Floor-by-Floor Metrics
-    floor_stats = []
-    # Floors 1 to 5
-    for floor in range(1, 6):
-        f_total = db.query(models.Seat).filter(models.Seat.floor == floor).count()
-        f_occ = db.query(models.Seat).filter(models.Seat.floor == floor, models.Seat.status == "OCCUPIED").count()
-        f_avail = db.query(models.Seat).filter(models.Seat.floor == floor, models.Seat.status == "AVAILABLE").count()
-        f_res = db.query(models.Seat).filter(models.Seat.floor == floor, models.Seat.status == "RESERVED").count()
-        f_maint = db.query(models.Seat).filter(models.Seat.floor == floor, models.Seat.status == "MAINTENANCE").count()
-        
-        f_rate = round((f_occ / f_total * 100), 2) if f_total > 0 else 0.0
-        
-        floor_stats.append(schemas.FloorAnalytics(
-            floor=floor,
-            total_seats=f_total,
-            occupied_seats=f_occ,
-            available_seats=f_avail,
-            reserved_seats=f_res,
-            maintenance_seats=f_maint,
-            occupancy_rate=f_rate
-        ))
+    # 3. All floor stats in ONE query
+    floor_rows = db.query(
+        models.Seat.floor,
+        func.count(models.Seat.id).label("total"),
+        func.sum(case((models.Seat.status == "OCCUPIED", 1), else_=0)).label("occupied"),
+        func.sum(case((models.Seat.status == "AVAILABLE", 1), else_=0)).label("available"),
+        func.sum(case((models.Seat.status == "RESERVED", 1), else_=0)).label("reserved"),
+        func.sum(case((models.Seat.status == "MAINTENANCE", 1), else_=0)).label("maintenance"),
+    ).group_by(models.Seat.floor).order_by(models.Seat.floor).all()
 
-    # 4. Department Metrics
-    dept_stats = []
-    # Get distinct departments from Employee table
-    departments = db.query(models.Employee.department).distinct().all()
-    departments = [d[0] for d in departments if d[0]]
-    
-    for dept in departments:
-        # Total employees in department
-        emp_count = db.query(models.Employee).filter(models.Employee.department == dept).count()
-        
-        # Total active seat allocations for department employees
-        allocated_seats = db.query(models.SeatAllocation).join(models.Employee).filter(
-            models.Employee.department == dept,
-            models.SeatAllocation.released_at.is_(None)
-        ).count()
-        
-        # Department utilization (allocated seats / total employees in dept)
-        dept_rate = round((allocated_seats / emp_count * 100), 2) if emp_count > 0 else 0.0
-        
-        dept_stats.append(schemas.DepartmentAnalytics(
-            department=dept,
-            employee_count=emp_count,
-            allocated_seats=allocated_seats,
-            occupancy_rate=dept_rate
-        ))
+    floor_stats = [
+        schemas.FloorAnalytics(
+            floor=r.floor,
+            total_seats=r.total,
+            occupied_seats=int(r.occupied or 0),
+            available_seats=int(r.available or 0),
+            reserved_seats=int(r.reserved or 0),
+            maintenance_seats=int(r.maintenance or 0),
+            occupancy_rate=round((int(r.occupied or 0) / r.total * 100), 2) if r.total > 0 else 0.0
+        ) for r in floor_rows
+    ]
+
+    # 4. All department stats in TWO queries (emp count + allocation count)
+    dept_emp_rows = db.query(
+        models.Employee.department,
+        func.count(models.Employee.id).label("emp_count")
+    ).group_by(models.Employee.department).all()
+
+    dept_alloc_rows = db.query(
+        models.Employee.department,
+        func.count(models.SeatAllocation.id).label("alloc_count")
+    ).join(models.SeatAllocation, models.SeatAllocation.employee_id == models.Employee.id)\
+     .filter(models.SeatAllocation.released_at.is_(None))\
+     .group_by(models.Employee.department).all()
+
+    alloc_by_dept = {r.department: r.alloc_count for r in dept_alloc_rows}
+
+    dept_stats = [
+        schemas.DepartmentAnalytics(
+            department=r.department,
+            employee_count=r.emp_count,
+            allocated_seats=alloc_by_dept.get(r.department, 0),
+            occupancy_rate=round((alloc_by_dept.get(r.department, 0) / r.emp_count * 100), 2) if r.emp_count > 0 else 0.0
+        ) for r in dept_emp_rows if r.department
+    ]
 
     return schemas.OverallAnalytics(
         total_seats=total_seats,
@@ -79,10 +85,10 @@ def get_utilization_analytics(db: Session = Depends(get_db)):
         reserved_seats=reserved_seats,
         maintenance_seats=maintenance_seats,
         overall_occupancy_rate=overall_occupancy_rate,
-        total_employees=total_employees,
-        active_employees=active_employees,
-        onboarding_employees=onboarding_employees,
-        exited_employees=exited_employees,
+        total_employees=int(emp_counts.total or 0),
+        active_employees=int(emp_counts.active or 0),
+        onboarding_employees=int(emp_counts.onboarding or 0),
+        exited_employees=int(emp_counts.exited or 0),
         by_floor=floor_stats,
         by_department=dept_stats
     )
