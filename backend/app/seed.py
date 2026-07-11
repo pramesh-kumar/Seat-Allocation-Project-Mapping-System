@@ -64,14 +64,12 @@ PROJECTS_DATA = [
 
 
 def seed_database(db: Session):
-    conn = db.connection()
-
     # 1. Clear all tables
-    conn.execute(text("DELETE FROM seat_allocations"))
-    conn.execute(text("DELETE FROM employee_projects"))
-    conn.execute(text("DELETE FROM employees"))
-    conn.execute(text("DELETE FROM projects"))
-    conn.execute(text("DELETE FROM seats"))
+    db.execute(text("DELETE FROM seat_allocations"))
+    db.execute(text("DELETE FROM employee_projects"))
+    db.execute(text("DELETE FROM employees"))
+    db.execute(text("DELETE FROM projects"))
+    db.execute(text("DELETE FROM seats"))
     db.commit()
 
     # 2. Seats — 5 floors × 4 zones × 250 = 5,000
@@ -90,7 +88,7 @@ def seed_database(db: Session):
                 seat_map[(floor, zone, number)] = seat_id
                 seat_id += 1
 
-    conn.execute(
+    db.execute(
         text("INSERT INTO seats (id,seat_code,floor,zone,number,status) "
              "VALUES (:id,:seat_code,:floor,:zone,:number,:status)"),
         seat_rows
@@ -107,7 +105,7 @@ def seed_database(db: Session):
             "start_date": "2025-01-01", "end_date": "2027-12-31"
         })
 
-    conn.execute(
+    db.execute(
         text("INSERT INTO projects (id,project_code,name,department,manager_name,start_date,end_date) "
              "VALUES (:id,:project_code,:name,:department,:manager_name,:start_date,:end_date)"),
         project_rows
@@ -138,7 +136,7 @@ def seed_database(db: Session):
             "status": statuses[i - 1],
         })
 
-    conn.execute(
+    db.execute(
         text("INSERT INTO employees (id,employee_id,first_name,last_name,email,department,role,status) "
              "VALUES (:id,:employee_id,:first_name,:last_name,:email,:department,:role,:status)"),
         employee_rows
@@ -161,7 +159,7 @@ def seed_database(db: Session):
         active_by_project.setdefault(proj_id, []).append(emp["id"])
         ep_id += 1
 
-    conn.execute(
+    db.execute(
         text("INSERT INTO employee_projects (id,employee_id,project_id,is_primary) "
              "VALUES (:id,:employee_id,:project_id,:is_primary)"),
         ep_rows
@@ -195,25 +193,25 @@ def seed_database(db: Session):
                 seat_num += 1
 
     if alloc_rows:
-        conn.execute(
+        db.execute(
             text("INSERT INTO seat_allocations (id,employee_id,seat_id,allocated_by,allocated_at,released_at) "
                  "VALUES (:id,:employee_id,:seat_id,:allocated_by,:allocated_at,:released_at)"),
             alloc_rows
         )
 
     if occupied_seat_ids:
-        conn.execute(
+        db.execute(
             text("UPDATE seats SET status='OCCUPIED' WHERE id = ANY(:ids)"),
             {"ids": list(occupied_seat_ids)}
         )
     db.commit()
 
     # 7. Mark RESERVED / MAINTENANCE
-    conn.execute(text(
+    db.execute(text(
         "UPDATE seats SET status='RESERVED' WHERE id IN "
         "(SELECT id FROM seats WHERE status='AVAILABLE' ORDER BY random() LIMIT 150)"
     ))
-    conn.execute(text(
+    db.execute(text(
         "UPDATE seats SET status='MAINTENANCE' WHERE id IN "
         "(SELECT id FROM seats WHERE status='AVAILABLE' ORDER BY random() LIMIT 100)"
     ))

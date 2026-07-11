@@ -53,14 +53,18 @@ def read_root():
 @app.post("/api/seed", status_code=status.HTTP_202_ACCEPTED)
 def trigger_seeding(
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
     current_role: str = Depends(RoleChecker(allowed_roles={"Admin"}))
 ):
+    from app.database import SessionLocal
     def run_seed():
+        db = SessionLocal()
         try:
             seed.seed_database(db)
         except Exception as e:
             print(f"Seeding error: {e}")
+            db.rollback()
+        finally:
+            db.close()
 
     background_tasks.add_task(run_seed)
     return {"message": "Seeding started! Data will be ready in ~60 seconds. Refresh the page after a minute."}
