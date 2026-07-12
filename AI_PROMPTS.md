@@ -117,3 +117,89 @@ To verify system integrity, the following validation methods were executed:
   * Visual navigation is robust: when an AI query redirects the view to a specific floor/zone, the state is seeded directly into the mount props, and older async queries are discarded via cancellation cleanup flags, preventing visual flickering or outdated layouts.
   * Projects grid supports clicks to open modal dialog overlays listing assigned employees, their specific seat codes, and quick management hooks to assign/remove team members.
   * Setting a query limit pagination filter is safe: the backend enforces `le=100` constraints, which is handled on the frontend via typeahead input autocompletion queries fetching matching subsets in real-time.
+
+---
+
+## 🤖 Prompt Flow Log (Prompts 1–10)
+
+### Prompt 1 – Architecture
+> "Design a full-stack architecture for a seat allocation and project mapping system supporting 5,000 employees. The system needs a FastAPI backend, React frontend, PostgreSQL database, and role-based access for Employee, HR, Project Lead, and Admin. Include an AI assistant for natural language queries."
+
+**AI Generated:** High-level architecture with separated backend/frontend, SQLAlchemy ORM, Pydantic schemas, and Axios API client.
+**Manually Verified:** Confirmed separation of concerns, added CORS middleware, and validated role header injection pattern.
+
+---
+
+### Prompt 2 – Database
+> "Create SQLAlchemy ORM models for: Employee (with employee_id, name, email, department, role, joining_date, status, created_at, updated_at), Project (with project_code, name, department, manager_name), Seat (with floor, zone, bay, seat_number, status), EmployeeProject mapping table, and SeatAllocation table with allocation and release timestamps."
+
+**AI Generated:** `models.py` with all tables, foreign keys, UniqueConstraints, and relationships.
+**Manually Fixed:** Added `onupdate` to `updated_at`, added `bay` field to Seat, added `joining_date` to Employee.
+
+---
+
+### Prompt 3 – Backend APIs
+> "Create FastAPI route files for employees, projects, seats, and analytics. Each route should use SQLAlchemy sessions via dependency injection. Include pagination, search filters, and role-based access control using X-User-Role header."
+
+**AI Generated:** `routes/employees.py`, `routes/projects.py`, `routes/seats.py`, `routes/analytics.py`.
+**Manually Fixed:** Replaced N+1 query loops with bulk JOIN queries in seats route. Replaced 25+ individual COUNT queries in analytics with 5 aggregated GROUP BY queries.
+
+---
+
+### Prompt 4 – Seat Allocation Logic
+> "Implement seat allocation logic that: prevents duplicate allocation, releases old seat when new one is assigned, clusters employees by project in the same floor/zone, suggests proximity-based seat recommendations for new joiners based on teammate locations."
+
+**AI Generated:** `crud.py` with allocate_seat, release_seat, and get_seat_recommendations functions.
+**Manually Fixed:** Replaced per-seat N+1 loop in recommendations with a single joined query across SeatAllocation, Employee, and EmployeeProject tables.
+
+---
+
+### Prompt 5 – AI Assistant
+> "Build a natural language query parser that uses Google Gemini API for intent extraction with a regex fallback. Support intents: find_employee_seat, find_seat_occupant, project_proximity, floor_occupancy, department_occupancy, list_onboarding, assign_seat, release_seat, project_manager."
+
+**AI Generated:** `ai_parser.py` with Gemini API integration and regex fallback patterns.
+**Manually Fixed:** Corrected model name from `gemini-3.1-flash-lite` to `gemini-2.0-flash-lite`. Added role-based access enforcement inside the parser for assign/release actions.
+
+---
+
+### Prompt 6 – Frontend
+> "Build a React + Tailwind CSS v4 SPA with: sidebar navigation, dark/light mode toggle, role switcher, floor plan grid (11 rows × 25 cols = 275 seats per zone), employee table with search/filter, onboarding panel with seat recommendations, analytics dashboard, AI chat panel, projects panel, and settings panel."
+
+**AI Generated:** All component files including `FloorPlan.jsx`, `StatsDashboard.jsx`, `SeatingTable.jsx`, `OnboardingPanel.jsx`, `AiChatPanel.jsx`.
+**Manually Fixed:** Updated grid rows from 10 to 11 for 275 seats. Fixed Tailwind v4 setup using `@tailwindcss/vite` plugin instead of `tailwind.config.js`.
+
+---
+
+### Prompt 7 – Testing
+> "List manual test cases for: seat allocation, seat release, duplicate allocation prevention, role-based access (Employee cannot allocate), onboarding seat suggestion, AI query parsing for employee seat lookup and floor occupancy."
+
+**AI Generated:** Test case checklist covering all major flows.
+**Manually Verified:** Ran each test case against the live production API at `/docs` Swagger UI. Confirmed 403 responses for unauthorized roles, 400 for duplicate allocations, and correct AI intent parsing.
+
+---
+
+### Prompt 8 – Debugging
+> "The seed endpoint is timing out on Render free tier. The floor plan is loading slowly. Analytics is making too many DB queries. Help fix these issues."
+
+**AI Generated:** Suggested background tasks for seeding, bulk queries for analytics.
+**Manually Fixed:** 
+- Moved seed to BackgroundTask with fresh SessionLocal to avoid closed session error.
+- Replaced 500 per-seat queries with single bulk JOIN in seats route.
+- Fixed `postgres://` → `postgresql://` URL normalization for SQLAlchemy.
+- Switched Supabase connection from port 5432 to 6543 (Shared Pooler) to fix IPv6 issue on Render.
+
+---
+
+### Prompt 9 – Deployment
+> "Deploy FastAPI backend on Render and React frontend on Vercel. Backend uses Supabase PostgreSQL. Configure environment variables DATABASE_URL and GEMINI_API_KEY on Render. Configure VITE_API_BASE_URL on Vercel."
+
+**AI Generated:** `render.yaml` config, deployment steps.
+**Manually Fixed:** Added `sslmode=require` and `pool_pre_ping=True` to SQLAlchemy engine for Supabase SSL requirement. Updated `api.js` to use `import.meta.env.VITE_API_BASE_URL` instead of hardcoded localhost.
+
+---
+
+### Prompt 10 – Refactoring
+> "Refactor the analytics endpoint to use aggregated SQL queries instead of individual counts. Refactor the seat recommendations to use a single JOIN query. Update seed data to use required project names (Indigo, Indreed, Mydreed, Preed, Serfy, Oreed, Bedegreed, Opreed, Serry, Kaary, Mered) and increase seats to 5,500 with bay grouping."
+
+**AI Generated:** Refactored analytics with GROUP BY + CASE, refactored recommendations with JOIN.
+**Manually Verified:** Confirmed analytics response time dropped significantly. Confirmed seat count is exactly 5,500 (5 × 4 × 275). Confirmed bay field correctly groups every 25 seats.

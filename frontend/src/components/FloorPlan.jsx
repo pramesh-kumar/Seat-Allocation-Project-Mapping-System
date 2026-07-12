@@ -134,7 +134,7 @@ export default function FloorPlan({ activeRole, externalFloor, externalZone, ext
   };
 
   // Group seats into a grid layout (e.g. 10 rows of 25 desks)
-  const rows = 10;
+  const rows = 11;
   const cols = 25;
 
   const renderSeatGrid = () => {

@@ -23,7 +23,7 @@ This repository houses a **FastAPI backend** (SQLite/PostgreSQL compatible) and 
 3. **Analytics Dashboard:** Visual representation of office-wide seating utilization, floor-by-floor occupancy rates, and department allocation trends.
 4. **AI Assistant / NLP Query Agent:** An integrated chat assistant supporting Google Gemini 3.1-flash-lite semantic parsing and a failsafe regex fallback. Handles lookups, recommendations, statistics, and role-enforced allocations/releases (e.g., *"Where sits Ronald Ward?"*, *"What is the occupancy rate of the Engineering department?"*).
 5. **Role-Based Access Control (RBAC):** Dynamically restricts operations (seating bookings, project updates, data lists) across four simulated roles: **Employee (Read-only)**, **HR Specialist**, **Project Team Manager**, and **System Admin**. A navbar role picker is included for easy testing.
-6. **Sub-second Seeding Tool:** Seeds exactly 5,000 seats, 20 projects, and 5,000 employees with contiguous project seating clusters in under 1 second.
+6. **Sub-second Seeding Tool:** Seeds exactly 5,500 seats (5 floors × 4 zones × 275 seats, grouped into 11 bays of 25), 20 projects, and 5,000 employees with contiguous project seating clusters.
 
 ---
 
@@ -89,6 +89,9 @@ erDiagram
         string department
         string role
         string status "ACTIVE, ONBOARDING, EXITED"
+        date joining_date
+        datetime created_at
+        datetime updated_at
     }
     PROJECT {
         int id PK
@@ -101,9 +104,10 @@ erDiagram
     }
     SEAT {
         int id PK
-        string seat_code UK "FL[1-5]-Z-[A-D]-S[001-250]"
+        string seat_code UK "FL[1-5]-Z-[A-D]-B[01-11]-S[001-275]"
         int floor
         string zone
+        int bay
         int number
         string status "AVAILABLE, OCCUPIED, RESERVED, MAINTENANCE"
     }

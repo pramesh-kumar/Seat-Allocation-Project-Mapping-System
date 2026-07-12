@@ -36,7 +36,8 @@ class EmployeeBase(BaseModel):
     email: str
     department: str
     role: str
-    status: str = "ACTIVE" # ACTIVE, ONBOARDING, EXITED
+    status: str = "ACTIVE"
+    joining_date: Optional[datetime.date] = None
 
 class EmployeeCreate(EmployeeBase):
     pass
@@ -48,6 +49,7 @@ class EmployeeUpdate(BaseModel):
     department: Optional[str] = None
     role: Optional[str] = None
     status: Optional[str] = None
+    joining_date: Optional[datetime.date] = None
 
 # Nested Project representation
 class EmployeeProjectOut(BaseModel):
@@ -64,6 +66,8 @@ class EmployeeOut(EmployeeBase):
     id: int
     seat_code: Optional[str] = None
     projects: List[EmployeeProjectOut] = []
+    created_at: Optional[datetime.datetime] = None
+    updated_at: Optional[datetime.datetime] = None
 
     class Config:
         from_attributes = True
@@ -74,8 +78,9 @@ class SeatBase(BaseModel):
     seat_code: str
     floor: int
     zone: str
+    bay: int
     number: int
-    status: str = "AVAILABLE" # AVAILABLE, OCCUPIED, RESERVED, MAINTENANCE
+    status: str = "AVAILABLE"
 
 class SeatCreate(SeatBase):
     pass

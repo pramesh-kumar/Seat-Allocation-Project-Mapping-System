@@ -14,8 +14,10 @@ class Employee(Base):
     department = Column(String, index=True, nullable=False)
     role = Column(String, nullable=False)
     status = Column(String, default="ACTIVE", index=True, nullable=False)  # ACTIVE, ONBOARDING, EXITED
+    joining_date = Column(Date, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow, nullable=False)
 
-    # Relationships
     project_mappings = relationship("EmployeeProject", back_populates="employee", cascade="all, delete-orphan")
     allocations = relationship("SeatAllocation", back_populates="employee")
 
@@ -60,13 +62,13 @@ class Seat(Base):
     __tablename__ = "seats"
 
     id = Column(Integer, primary_key=True, index=True)
-    seat_code = Column(String, unique=True, index=True, nullable=False)  # e.g., FL1-Z-A-S005
-    floor = Column(Integer, index=True, nullable=False)  # 1 to 5
-    zone = Column(String, index=True, nullable=False)   # A, B, C, D
-    number = Column(Integer, nullable=False)            # 1 to 250
-    status = Column(String, default="AVAILABLE", index=True, nullable=False)  # AVAILABLE, OCCUPIED, RESERVED, MAINTENANCE
+    seat_code = Column(String, unique=True, index=True, nullable=False)
+    floor = Column(Integer, index=True, nullable=False)
+    zone = Column(String, index=True, nullable=False)
+    bay = Column(Integer, index=True, nullable=False)
+    number = Column(Integer, nullable=False)
+    status = Column(String, default="AVAILABLE", index=True, nullable=False)
 
-    # Relationships
     allocations = relationship("SeatAllocation", back_populates="seat")
 
 

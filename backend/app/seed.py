@@ -39,28 +39,35 @@ DEPARTMENTS = {
     "Support":     ["Customer Support Agent","Support Team Lead","Support Manager"],
 }
 
+# Required project names from assessment
 PROJECTS_DATA = [
-    ("PRJ-APOLLO",   "Project Apollo",   "Engineering"),
-    ("PRJ-PHOENIX",  "Project Phoenix",  "Engineering"),
-    ("PRJ-TITAN",    "Project Titan",    "Engineering"),
-    ("PRJ-ORION",    "Project Orion",    "Engineering"),
-    ("PRJ-GENESIS",  "Project Genesis",  "Product"),
-    ("PRJ-NEXUS",    "Project Nexus",    "Product"),
-    ("PRJ-VANGUARD", "Project Vanguard", "Operations"),
-    ("PRJ-SYNERGY",  "Project Synergy",  "Operations"),
-    ("PRJ-ECLIPSE",  "Project Eclipse",  "Marketing"),
-    ("PRJ-HORIZON",  "Project Horizon",  "Marketing"),
-    ("PRJ-SUMMIT",   "Project Summit",   "Sales"),
-    ("PRJ-BEACON",   "Project Beacon",   "Sales"),
-    ("PRJ-ODYSSEY",  "Project Odyssey",  "Finance"),
-    ("PRJ-VELOCITY", "Project Velocity", "Engineering"),
-    ("PRJ-AURORA",   "Project Aurora",   "Engineering"),
-    ("PRJ-VALKYRIE", "Project Valkyrie", "Engineering"),
-    ("PRJ-GALAXY",   "Project Galaxy",   "Product"),
-    ("PRJ-ZENITH",   "Project Zenith",   "Operations"),
-    ("PRJ-PULSE",    "Project Pulse",    "HR"),
-    ("PRJ-SHIELD",   "Project Shield",   "Finance"),
+    ("PRJ-INDIGO",    "Indigo",    "Engineering"),
+    ("PRJ-INDREED",   "Indreed",   "Engineering"),
+    ("PRJ-MYDREED",   "Mydreed",   "Engineering"),
+    ("PRJ-PREED",     "Preed",     "Product"),
+    ("PRJ-SERFY",     "Serfy",     "Product"),
+    ("PRJ-OREED",     "Oreed",     "Operations"),
+    ("PRJ-BEDEGREED", "Bedegreed", "Operations"),
+    ("PRJ-OPREED",    "Opreed",    "Marketing"),
+    ("PRJ-SERRY",     "Serry",     "Marketing"),
+    ("PRJ-KAARY",     "Kaary",     "Sales"),
+    ("PRJ-MERED",     "Mered",     "Sales"),
+    ("PRJ-NEXUS",     "Nexus",     "Finance"),
+    ("PRJ-VANGUARD",  "Vanguard",  "Finance"),
+    ("PRJ-ECLIPSE",   "Eclipse",   "HR"),
+    ("PRJ-HORIZON",   "Horizon",   "HR"),
+    ("PRJ-SUMMIT",    "Summit",    "Support"),
+    ("PRJ-BEACON",    "Beacon",    "Support"),
+    ("PRJ-VELOCITY",  "Velocity",  "Engineering"),
+    ("PRJ-PULSE",     "Pulse",     "Product"),
+    ("PRJ-SHIELD",    "Shield",    "Operations"),
 ]
+
+# 5 floors x 4 zones x 275 seats = 5,500 seats
+# 275 seats per zone / 25 seats per bay = 11 bays per zone
+SEATS_PER_ZONE = 275
+SEATS_PER_BAY = 25
+BAYS_PER_ZONE = SEATS_PER_ZONE // SEATS_PER_BAY  # 11
 
 
 def seed_database(db: Session):
@@ -72,25 +79,28 @@ def seed_database(db: Session):
     db.execute(text("DELETE FROM seats"))
     db.commit()
 
-    # 2. Seats — 5 floors × 4 zones × 250 = 5,000
+    # 2. Seats — 5 floors × 4 zones × 275 = 5,500
     seat_rows = []
     seat_id = 1
     seat_map = {}
     for floor in range(1, 6):
         for zone in ["A", "B", "C", "D"]:
-            for number in range(1, 251):
+            for number in range(1, SEATS_PER_ZONE + 1):
+                bay = ((number - 1) // SEATS_PER_BAY) + 1
+                seat_code = f"FL{floor}-Z-{zone}-B{bay:02d}-S{number:03d}"
                 seat_rows.append({
                     "id": seat_id,
-                    "seat_code": f"FL{floor}-Z-{zone}-S{number:03d}",
+                    "seat_code": seat_code,
                     "floor": floor, "zone": zone,
-                    "number": number, "status": "AVAILABLE"
+                    "bay": bay, "number": number,
+                    "status": "AVAILABLE"
                 })
                 seat_map[(floor, zone, number)] = seat_id
                 seat_id += 1
 
     db.execute(
-        text("INSERT INTO seats (id,seat_code,floor,zone,number,status) "
-             "VALUES (:id,:seat_code,:floor,:zone,:number,:status)"),
+        text("INSERT INTO seats (id,seat_code,floor,zone,bay,number,status) "
+             "VALUES (:id,:seat_code,:floor,:zone,:bay,:number,:status)"),
         seat_rows
     )
     db.commit()
@@ -120,12 +130,15 @@ def seed_database(db: Session):
     statuses = ["ACTIVE"] * 4800 + ["ONBOARDING"] * 100 + ["EXITED"] * 100
     random.shuffle(statuses)
     dept_keys = list(DEPARTMENTS.keys())
+    base_date = datetime.date(2025, 1, 1)
 
     employee_rows = []
     for i in range(1, 5001):
         fn = random.choice(FIRST_NAMES)
         ln = random.choice(LAST_NAMES)
         dept = random.choice(dept_keys)
+        joining_date = (base_date + datetime.timedelta(days=random.randint(0, 365))).isoformat()
+        now = datetime.datetime.utcnow().isoformat()
         employee_rows.append({
             "id": i,
             "employee_id": f"EMP-{10000 + i}",
@@ -134,11 +147,14 @@ def seed_database(db: Session):
             "department": dept,
             "role": random.choice(DEPARTMENTS[dept]),
             "status": statuses[i - 1],
+            "joining_date": joining_date,
+            "created_at": now,
+            "updated_at": now,
         })
 
     db.execute(
-        text("INSERT INTO employees (id,employee_id,first_name,last_name,email,department,role,status) "
-             "VALUES (:id,:employee_id,:first_name,:last_name,:email,:department,:role,:status)"),
+        text("INSERT INTO employees (id,employee_id,first_name,last_name,email,department,role,status,joining_date,created_at,updated_at) "
+             "VALUES (:id,:employee_id,:first_name,:last_name,:email,:department,:role,:status,:joining_date,:created_at,:updated_at)"),
         employee_rows
     )
     db.commit()
@@ -177,7 +193,7 @@ def seed_database(db: Session):
         floor, zone = locations[loc_idx % len(locations)]
         seat_num = 1
         for emp_id in emp_ids:
-            while seat_num <= 250:
+            while seat_num <= SEATS_PER_ZONE:
                 sid = seat_map.get((floor, zone, seat_num))
                 if sid and sid not in occupied_seat_ids:
                     occupied_seat_ids.add(sid)
@@ -206,7 +222,7 @@ def seed_database(db: Session):
         )
     db.commit()
 
-    # 7. Mark RESERVED / MAINTENANCE
+    # 7. Mark RESERVED (>=100) / MAINTENANCE (>=50)
     db.execute(text(
         "UPDATE seats SET status='RESERVED' WHERE id IN "
         "(SELECT id FROM seats WHERE status='AVAILABLE' ORDER BY random() LIMIT 150)"
