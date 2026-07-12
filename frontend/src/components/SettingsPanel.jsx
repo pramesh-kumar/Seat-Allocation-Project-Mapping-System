@@ -6,7 +6,7 @@ export default function SettingsPanel({ activeRole }) {
   const [seeding, setSeeding] = useState(false);
 
   const handleSeedDatabase = async () => {
-    if (!window.confirm("Are you sure you want to reset and seed the database with 5,000 employees and seats? This will clear current allocations.")) return;
+    if (!window.confirm("Are you sure you want to reset and seed the database with 5,000 employees and 5,500 seats? This will clear current allocations.")) return;
     setSeeding(true);
     try {
       const res = await api.triggerSeeding();
@@ -72,7 +72,7 @@ export default function SettingsPanel({ activeRole }) {
               className="max-w-md bg-rose-600 hover:bg-rose-500 disabled:bg-slate-800 text-white font-semibold py-2 px-4 rounded-lg transition-colors cursor-pointer flex items-center justify-center gap-1.5 text-xs"
             >
               <RefreshCw className={`w-4 h-4 ${seeding ? 'animate-spin' : ''}`} />
-              Reset & Seed Database (5,000 records)
+              Reset & Seed Database (5,500 seats, 5,000 employees)
             </button>
           ) : (
             <div className="bg-slate-100 dark:bg-slate-900/40 p-4 rounded text-slate-550 dark:text-slate-500 border border-slate-250 dark:border-ethara-border/30 text-center italic">

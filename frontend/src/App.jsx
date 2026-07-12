@@ -57,7 +57,7 @@ export default function App() {
   };
 
   const handleSeedDatabase = async () => {
-    if (!window.confirm("Are you sure you want to reset and seed the database with 5,000 employees and seats? This will clear current allocations.")) return;
+    if (!window.confirm("Are you sure you want to reset and seed the database with 5,000 employees and 5,500 seats? This will clear current allocations.")) return;
     setSeeding(true);
     try {
       const res = await api.triggerSeeding();
